@@ -3,7 +3,7 @@
 公開聊天室:從網頁或手機輸入的訊息,所有人即時看得到。資料庫先放 2 筆示範訊息。
 
 ```
-├── apps/web-react         → Vercel(1、2)            尚未建立
+├── apps/web-react         → Vercel(1、2,同一份程式碼)
 ├── apps/web-angular       → Vercel(3,目前略過)     尚未建立
 ├── apps/flutter-webview   → GitHub Actions → APK(4) 尚未建立
 ├── apps/flutter-native    → GitHub Actions → APK(5) 尚未建立
@@ -21,6 +21,7 @@
 | `supabase-migrate.yml` | `supabase/migrations/**` | dry-run 後 `supabase db push` |
 | `backend.yml` | `backend/fastapi/**`、`render.yaml` | pytest → 呼叫 Render deploy hook → 等 `/health` 回報新 commit |
 | `flutter-webview-apk.yml` / `flutter-native-apk.yml` | `apps/flutter-*/**` | 編譯 APK → GitHub Release(tag `flutter-xxx-v<run>`) |
+| `web-react.yml` | `apps/web-react/**` | 單元測試 + TypeScript 檢查 + build(不部署) |
 | `vercel-deploy-log.yml` | Vercel 回報的 deployment_status | 把網頁部署結果寫進 DEPLOY_LOGS |
 
 網頁本身由 Vercel 的 GitHub 整合自動部署,不需要 workflow。
@@ -29,8 +30,18 @@
 
 1. **Supabase**:建立專案(手動,比 CI 自動建穩定)。
 2. **Render**:New → Blueprint → 選這個 repo,會讀 `render.yaml`。在 Render 填入環境變數,並到 Settings 複製 **Deploy Hook URL**。
-3. **Vercel**:每個網頁各建一個專案、設定 Root Directory。專案名稱要包含 `web-react` / `web-webview` / `web-angular`,部署紀錄才對得上 APP_ID。
-4. **GitHub → Settings → Secrets and variables → Actions**:
+3. **Vercel**:同一個 repo 匯入兩次,兩個專案的 Root Directory 都設 `apps/web-react`:
+
+   | Vercel 專案名稱 | `VITE_APP_ID` | 用途 |
+   |---|---|---|
+   | `web-react`(名稱要包含這段) | `1` | 一般網頁 |
+   | `web-webview` | `2` | 給 4 號 APK 的 WebView 載入(版面較精簡) |
+
+   兩個專案都要設 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`、`VITE_API_BASE_URL`(見 `apps/web-react/.env.example`)。
+   專案名稱包含 `web-react` / `web-webview` / `web-angular`,部署紀錄才對得上 APP_ID。
+   4 號 APK 載入 2 號網址時加上 `?app_id=4`,訊息就會標成從 APK 送出。
+4. **回到 Render 填 CORS**:`CORS_ORIGINS` 填兩個 Vercel 正式網址(逗號分隔),`CORS_ORIGIN_REGEX` 填 preview 網址規則,例如 `^https://web-(react|webview)-.*\.vercel\.app$`。沒填的話網頁送訊息會被瀏覽器擋下。
+5. **GitHub → Settings → Secrets and variables → Actions**:
 
 | Secrets | 說明 |
 |---|---|

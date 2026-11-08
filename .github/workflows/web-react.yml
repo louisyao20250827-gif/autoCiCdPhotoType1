@@ -1,0 +1,38 @@
+# Checks only — Vercel deploys apps 1 and 2 itself via its GitHub integration.
+name: "1-2 · React web checks"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web-react/**"
+      - ".github/workflows/web-react.yml"
+  pull_request:
+    paths:
+      - "apps/web-react/**"
+  workflow_dispatch:
+
+concurrency:
+  group: web-react-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web-react
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # No lockfile yet (local machine has Node 12). Once one is committed, switch to `npm ci` + cache.
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - name: Type-check and build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: build-check
+          VITE_API_BASE_URL: https://example.onrender.com
