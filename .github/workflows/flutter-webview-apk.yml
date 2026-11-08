@@ -1,0 +1,23 @@
+name: "4 · Flutter WebView → APK"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/flutter-webview/**"
+      - ".github/workflows/flutter-webview-apk.yml"
+      - ".github/workflows/_flutter-apk.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apk-flutter-webview
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    uses: ./.github/workflows/_flutter-apk.yml
+    with:
+      app_dir: apps/flutter-webview
+      app_id: 4
+      release_prefix: flutter-webview
+    secrets: inherit

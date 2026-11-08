@@ -1,0 +1,40 @@
+name: "9 · Supabase migrations"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - ".github/workflows/supabase-migrate.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-migrate
+  cancel-in-progress: false   # never interrupt a running migration
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Dry run (show pending migrations)
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Apply migrations
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Log to DEPLOY_LOGS
+        if: always()
+        run: bash .github/scripts/log-deploy.sh 9 "${{ job.status }}" "supabase db push"

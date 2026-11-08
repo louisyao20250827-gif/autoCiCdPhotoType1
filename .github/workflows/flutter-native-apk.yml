@@ -1,0 +1,23 @@
+name: "5 · Flutter native → APK"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/flutter-native/**"
+      - ".github/workflows/flutter-native-apk.yml"
+      - ".github/workflows/_flutter-apk.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apk-flutter-native
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    uses: ./.github/workflows/_flutter-apk.yml
+    with:
+      app_dir: apps/flutter-native
+      app_id: 5
+      release_prefix: flutter-native
+    secrets: inherit

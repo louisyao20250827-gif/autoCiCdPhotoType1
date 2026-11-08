@@ -1,0 +1,93 @@
+# Reusable: build a Flutter APK, publish it to GitHub Releases, log to DEPLOY_LOGS.
+name: flutter-apk (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      app_dir:
+        required: true
+        type: string
+      app_id:
+        required: true
+        type: number
+      release_prefix:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create GitHub Release
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.app_dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - name: flutter test
+        run: if [ -d test ]; then flutter test; else echo "no test/ directory, skipping"; fi
+
+      # Release signing. android/app/build.gradle must read android/key.properties (see README).
+      # Without ANDROID_KEYSTORE_BASE64 the APK falls back to debug signing (fine for internal testing only).
+      - name: Prepare signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "::warning::no keystore secret, using debug signing"; exit 0; fi
+          echo "$KEYSTORE_B64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+      # Only public values go into the APK (it can be decompiled).
+      - name: Build APK
+        run: |
+          flutter build apk --release \
+            --build-number=${{ github.run_number }} \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=API_BASE_URL=${{ vars.BACKEND_PUBLIC_URL }} \
+            --dart-define=WEB_APP_URL=${{ vars.WEBVIEW_WEB_URL }} \
+            --dart-define=APP_ID=${{ inputs.app_id }}
+          mv build/app/outputs/flutter-apk/app-release.apk "build/${{ inputs.release_prefix }}-${{ github.run_number }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.release_prefix }}-apk
+          path: ${{ inputs.app_dir }}/build/${{ inputs.release_prefix }}-${{ github.run_number }}.apk
+
+      - name: Publish GitHub Release
+        id: release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_prefix }}-v${{ github.run_number }}
+          name: ${{ inputs.release_prefix }} build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          files: ${{ inputs.app_dir }}/build/${{ inputs.release_prefix }}-${{ github.run_number }}.apk
+
+      - name: Log to DEPLOY_LOGS
+        if: always()
+        working-directory: .
+        run: bash .github/scripts/log-deploy.sh ${{ inputs.app_id }} "${{ job.status }}" "APK build" "${{ steps.release.outputs.url }}"

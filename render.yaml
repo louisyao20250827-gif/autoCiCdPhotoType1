@@ -1,0 +1,26 @@
+# Render Blueprint for the FastAPI backend (#8).
+# Auto-deploy is off: GitHub Actions runs tests first, then calls the Render deploy hook.
+services:
+  - type: web
+    name: chatlog-fastapi
+    runtime: python
+    rootDir: backend/fastapi
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CORS_ORIGIN_REGEX
+        sync: false
+      - key: WRITE_RATE_LIMIT_PER_MINUTE
+        value: "20"
